@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/db";
+import { getPool } from "@/db";
 
 export async function GET(request: Request) {
   try {
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
       params.push(category);
     }
 
+    const pool = getPool();
     const result = await pool.query(query, params);
 
     return NextResponse.json(

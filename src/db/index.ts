@@ -28,47 +28,83 @@ function getDatabaseUrl(): string {
   return url;
 }
 
-const databaseUrl = getDatabaseUrl();
+// Ленивая инициализация для избежания ошибок при билде
+let databaseUrl: string | null = null;
+let pool: Pool | null = null;
+let dbInstance: ReturnType<typeof drizzle> | null = null;
 
-// Логируем только начало URL для безопасности
-const urlPreview =
-  databaseUrl.length > 30 ? databaseUrl.substring(0, 30) + "..." : "***";
-console.log("🔌 Подключение к БД через Neon (node-postgres):", urlPreview);
+function initializeDatabase() {
+  if (dbInstance) return dbInstance;
 
-// Определяем, нужен ли SSL (для Neon и других облачных БД)
-const needsSSL =
-  databaseUrl.includes("neon.tech") ||
-  databaseUrl.includes("vercel") ||
-  databaseUrl.includes("supabase") ||
-  databaseUrl.includes("railway") ||
-  databaseUrl.includes("render.com");
+  databaseUrl = getDatabaseUrl();
 
-// Создаем пул соединений для Neon
-// Используем node-postgres вместо neon-serverless для совместимости с Drizzle
-const pool = new Pool({
-  connectionString: databaseUrl,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 15000,
-  keepAlive: true,
-  keepAliveInitialDelayMillis: 10000,
-  // Включаем SSL для облачных БД
-  ...(needsSSL && {
-    ssl: {
-      rejectUnauthorized: false,
-    },
-  }),
+  // Логируем только начало URL для безопасности
+  const urlPreview =
+    databaseUrl.length > 30 ? databaseUrl.substring(0, 30) + "..." : "***";
+  console.log("🔌 Подключение к БД через Neon (node-postgres):", urlPreview);
+
+  // Определяем, нужен ли SSL (для Neon и других облачных БД)
+  const needsSSL =
+    databaseUrl.includes("neon.tech") ||
+    databaseUrl.includes("vercel") ||
+    databaseUrl.includes("supabase") ||
+    databaseUrl.includes("railway") ||
+    databaseUrl.includes("render.com");
+
+  // Создаем пул соединений для Neon
+  // Используем node-postgres вместо neon-serverless для совместимости с Drizzle
+  pool = new Pool({
+    connectionString: databaseUrl,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 15000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+    // Включаем SSL для облачных БД
+    ...(needsSSL && {
+      ssl: {
+        rejectUnauthorized: false,
+      },
+    }),
+  });
+
+  // Обработка ошибок подключения
+  pool.on("error", (err) => {
+    console.error("❌ Ошибка подключения к БД:", err);
+  });
+
+  // Создаем Drizzle instance с пулом соединений
+  dbInstance = drizzle(pool, { schema });
+  return dbInstance;
+}
+
+// Ленивая инициализация - БД будет подключена при первом использовании
+// Это позволяет избежать ошибок при билде Next.js, когда DATABASE_URL может быть недоступен
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_target, prop) {
+    if (!dbInstance) {
+      dbInstance = initializeDatabase();
+    }
+    const value = dbInstance[prop as keyof typeof dbInstance];
+    if (typeof value === "function") {
+      return value.bind(dbInstance);
+    }
+    return value;
+  },
 });
 
-// Обработка ошибок подключения
-pool.on("error", (err) => {
-  console.error("❌ Ошибка подключения к БД:", err);
-});
+// Экспортируем функцию для получения пула
+export const getPool = () => {
+  if (!pool) {
+    initializeDatabase();
+  }
+  if (!pool) {
+    throw new Error("Failed to initialize database pool");
+  }
+  return pool;
+};
 
-// Создаем Drizzle instance с пулом соединений
-export const db = drizzle(pool, { schema });
-
-// Экспортируем пул для прямых SQL запросов
-export { pool };
+// Экспортируем пул для обратной совместимости
+export { getPool as pool };
 
 export default db;

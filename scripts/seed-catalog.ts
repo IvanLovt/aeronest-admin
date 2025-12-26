@@ -14,7 +14,7 @@ if (existsSync(envLocalPath)) {
 
 async function seedCatalog() {
   // Динамический импорт после загрузки переменных окружения
-  const { db, pool } = await import("../src/db");
+  const { db, getPool } = await import("../src/db");
   const { catalog } = await import("../src/db/schema");
 
   try {
@@ -74,6 +74,7 @@ async function seedCatalog() {
 
     // Очищаем таблицу перед заполнением
     console.log("🗑️  Очистка существующих данных...");
+    const pool = getPool();
     await pool.query("DELETE FROM catalog");
     console.log("✅ Таблица очищена\n");
 

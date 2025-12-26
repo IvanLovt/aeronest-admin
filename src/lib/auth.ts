@@ -1,7 +1,7 @@
 import { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { db, pool } from "@/db";
+import { db, getPool } from "@/db";
 import { users, accounts, sessions, verificationTokens } from "@/db/schema";
 import bcrypt from "bcryptjs";
 
@@ -47,6 +47,7 @@ export const authOptions = {
 
           // Прямой SQL запрос к Neon для проверки пользователя
           // Используем прямой запрос, чтобы проверить данные напрямую в БД
+          const pool = getPool();
           const queryResult = await pool.query(
             `SELECT id, email, name, password_hash, image 
              FROM users 

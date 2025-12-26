@@ -16,7 +16,7 @@ if (existsSync(envLocalPath)) {
 
 async function createAdminUser() {
   // Динамический импорт после загрузки переменных окружения
-  const { pool } = await import("../src/db");
+  const { getPool } = await import("../src/db");
   try {
     console.log("👤 Создание пользователя Admin напрямую в Neon...\n");
 
@@ -26,6 +26,7 @@ async function createAdminUser() {
 
     // Проверяем, существует ли пользователь (прямой SQL запрос к Neon)
     console.log("🔍 Проверка существующего пользователя...");
+    const pool = getPool();
     const existingUserResult = await pool.query(
       `SELECT id, email, name, password_hash, created_at 
        FROM users 
