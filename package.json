@@ -17,7 +17,8 @@
     "db:create-admin": "tsx scripts/create-admin-user.ts",
     "db:test-admin-login": "tsx scripts/test-admin-login.ts",
     "db:seed-partners": "tsx scripts/seed-partners.ts",
-    "db:seed-catalog": "tsx scripts/seed-catalog.ts"
+    "db:seed-catalog": "tsx scripts/seed-catalog.ts",
+    "db:seed-items": "tsx scripts/seed-items.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",

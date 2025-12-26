@@ -215,9 +215,36 @@ export const catalog = pgTable("catalog", {
     .defaultNow(),
 });
 
+// Таблица товаров (items)
+export const items = pgTable("items", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  catalogId: text("catalog_id")
+    .notNull()
+    .references(() => catalog.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  ves: text("ves").notNull(), // Вес товара (например, "500г", "1кг")
+  date: timestamp("date").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .$onUpdate(() => new Date())
+    .defaultNow(),
+});
+
 // Relations для каталога
-export const catalogRelations = relations(catalog, () => ({
-  // Можно добавить связи при необходимости
+export const catalogRelations = relations(catalog, ({ many }) => ({
+  items: many(items),
+}));
+
+// Relations для товаров
+export const itemsRelations = relations(items, ({ one }) => ({
+  catalog: one(catalog, {
+    fields: [items.catalogId],
+    references: [catalog.id],
+  }),
 }));
 
 // Типы для экспорта
@@ -232,3 +259,5 @@ export type Partner = typeof partners.$inferSelect;
 export type NewPartner = typeof partners.$inferInsert;
 export type CatalogItem = typeof catalog.$inferSelect;
 export type NewCatalogItem = typeof catalog.$inferInsert;
+export type Item = typeof items.$inferSelect;
+export type NewItem = typeof items.$inferInsert;

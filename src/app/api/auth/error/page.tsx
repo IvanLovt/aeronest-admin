@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 
-export default function AuthErrorPage() {
+function ErrorContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
 
@@ -41,12 +41,12 @@ export default function AuthErrorPage() {
           {getErrorMessage(error)}
         </p>
         <div className="text-center">
-          <a
+          <Link
             href="/"
             className="inline-block px-6 py-3 bg-[#0A84FF] text-white rounded-lg font-semibold hover:bg-[#0971d1] transition-colors"
           >
             Вернуться на главную
-          </a>
+          </Link>
         </div>
         {error && (
           <div className="mt-4 p-4 bg-gray-100 rounded-lg">
@@ -57,5 +57,19 @@ export default function AuthErrorPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-gray-600">Загрузка...</div>
+        </div>
+      }
+    >
+      <ErrorContent />
+    </Suspense>
   );
 }

@@ -14,6 +14,9 @@ import {
   UtensilsCrossed,
   Store,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import WindowCart from "@/components/UserDash/WindowCart";
+import AuthModal from "@/components/AuthModal";
 
 // Маппинг названий иконок на компоненты
 const iconMap: Record<string, React.ElementType> = {
@@ -37,9 +40,15 @@ interface CatalogItem {
 }
 
 export default function CatalogSection() {
+  const { data: session } = useSession();
   const [filter, setFilter] = useState("all");
   const [partners, setPartners] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [selectedPartner, setSelectedPartner] = useState<CatalogItem | null>(
+    null
+  );
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
     async function fetchCatalog() {
@@ -161,7 +170,19 @@ export default function CatalogSection() {
               <p className="text-sm text-gray-500 mb-6 leading-relaxed">
                 {p.description}
               </p>
-              <button className="w-full py-4 bg-gray-50 group-hover:bg-[#0A84FF] group-hover:text-white text-[#0D1B2A] rounded-2xl font-bold transition-all flex items-center justify-center gap-2">
+              <button
+                onClick={() => {
+                  // Проверяем авторизацию
+                  if (!session?.user) {
+                    setIsAuthModalOpen(true);
+                    return;
+                  }
+                  // Если авторизован, открываем корзину
+                  setSelectedPartner(p);
+                  setIsCartOpen(true);
+                }}
+                className="w-full py-4 bg-gray-50 group-hover:bg-[#0A84FF] group-hover:text-white text-[#0D1B2A] rounded-2xl font-bold transition-all flex items-center justify-center gap-2"
+              >
                 Перейти к заказу
                 <ChevronRight size={18} />
               </button>
@@ -169,6 +190,26 @@ export default function CatalogSection() {
           ))}
         </div>
       )}
+
+      <WindowCart
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        partnerName={selectedPartner?.name}
+        catalogId={selectedPartner?.id}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        defaultMode="register"
+        onSuccess={() => {
+          setIsAuthModalOpen(false);
+          // После успешной регистрации/входа открываем корзину
+          if (selectedPartner) {
+            setIsCartOpen(true);
+          }
+        }}
+      />
     </div>
   );
 }

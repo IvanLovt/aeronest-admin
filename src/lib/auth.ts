@@ -1,8 +1,6 @@
 import { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { db, getPool } from "@/db";
-import { users, accounts, sessions, verificationTokens } from "@/db/schema";
+import { getPool } from "@/db";
 import bcrypt from "bcryptjs";
 
 declare module "next-auth" {
@@ -21,14 +19,8 @@ if (!process.env.AUTH_SECRET) {
 
 export const authOptions = {
   secret: process.env.AUTH_SECRET,
-  adapter: DrizzleAdapter(db, {
-    usersTable: users,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    accountsTable: accounts as any,
-    sessionsTable: sessions,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    verificationTokensTable: verificationTokens as any,
-  }),
+  // Адаптер не нужен при использовании JWT стратегии и CredentialsProvider
+  // Адаптер используется только для database sessions
   providers: [
     Credentials({
       name: "Credentials",
@@ -167,3 +159,7 @@ export const authOptions = {
     },
   },
 };
+
+// Экспортируем функцию auth для использования в API routes
+import NextAuth from "next-auth";
+export const { auth } = NextAuth(authOptions as any);

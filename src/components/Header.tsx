@@ -69,7 +69,12 @@ export default function Header({
           >
             Каталог
           </button>
-          <button className="hover:text-[#0A84FF] transition-colors">
+          <button
+            onClick={() => setActiveTab("busnes")}
+            className={`hover:text-[#0A84FF] transition-colors ${
+              activeTab === "busnes" ? "text-[#0A84FF]" : ""
+            }`}
+          >
             Бизнесу
           </button>
           <button className="hover:text-[#0A84FF] transition-colors">
