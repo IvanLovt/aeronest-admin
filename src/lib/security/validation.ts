@@ -26,7 +26,10 @@ export const nameSchema = z
   .string()
   .min(2, "Имя должно содержать минимум 2 символа")
   .max(100, "Имя слишком длинное")
-  .regex(/^[a-zA-Zа-яА-ЯёЁ\s-]+$/, "Имя может содержать только буквы, пробелы и дефисы")
+  .regex(
+    /^[a-zA-Zа-яА-ЯёЁ\s-]+$/,
+    "Имя может содержать только буквы, пробелы и дефисы"
+  )
   .trim();
 
 // Валидация реферального кода
@@ -34,7 +37,10 @@ export const referralCodeSchema = z
   .string()
   .min(3, "Реферальный код слишком короткий")
   .max(50, "Реферальный код слишком длинный")
-  .regex(/^[A-Z0-9]+$/, "Реферальный код может содержать только заглавные буквы и цифры")
+  .regex(
+    /^[A-Z0-9]+$/,
+    "Реферальный код может содержать только заглавные буквы и цифры"
+  )
   .toUpperCase()
   .trim();
 
@@ -68,13 +74,18 @@ export const amountSchema = z
 // Валидация адреса
 export const addressSchema = z.object({
   title: z.string().min(1, "Название адреса обязательно").max(100),
-  street: z.string().min(5, "Улица должна содержать минимум 5 символов").max(200),
+  street: z
+    .string()
+    .min(5, "Улица должна содержать минимум 5 символов")
+    .max(200),
   building: z.string().max(20).optional(),
   entrance: z.string().max(10).optional(),
   floor: z.string().max(10).optional(),
   apartment: z.string().max(20).optional(),
   comment: z.string().max(500).optional(),
-  coords: z.string().regex(/^-?\d+\.?\d*,-?\d+\.?\d*$/, "Неверный формат координат"),
+  coords: z
+    .string()
+    .regex(/^-?\d+\.?\d*,-?\d+\.?\d*$/, "Неверный формат координат"),
 });
 
 // Функция для санитизации строк (защита от XSS)
@@ -96,7 +107,8 @@ export function validateAndSanitize<T>(
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const firstError = error.errors[0];
+      const issues = error.issues;
+      const firstError = issues && issues.length > 0 ? issues[0] : null;
       return {
         success: false,
         error: firstError?.message || "Ошибка валидации",
@@ -105,4 +117,3 @@ export function validateAndSanitize<T>(
     return { success: false, error: "Неизвестная ошибка валидации" };
   }
 }
-
