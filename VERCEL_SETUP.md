@@ -125,3 +125,4 @@ postgresql://username:password@host:port/database?sslmode=require
 2. Убедитесь, что база данных доступна из интернета
 3. Проверьте firewall настройки базы данных
 
+
