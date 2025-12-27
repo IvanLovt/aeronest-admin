@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Package, MapPin, Calendar, Loader2 } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
+import {
+  Package,
+  MapPin,
+  Calendar,
+  Loader2,
+  ArrowUpDown,
+  ArrowDown,
+} from "lucide-react";
+import { useFetchWithAuth } from "@/hooks/useFetchWithAuth";
 
 interface OrderItem {
   id: string;
@@ -30,39 +37,20 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 };
 
 export default function OrderHistory() {
-  const { data: session } = useSession();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<"default" | "delivered-first">(
+    "default"
+  );
 
-  useEffect(() => {
-    const fetchOrders = async () => {
-      if (!session?.user?.id) {
-        setLoading(false);
-        return;
-      }
+  const { data, loading, error } = useFetchWithAuth<{ orders: Order[] }>({
+    url: "/api/orders/my",
+  });
 
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await fetch("/api/orders/my");
-        const data = await response.json();
-
-        if (data.success) {
-          setOrders(data.orders || []);
-        } else {
-          setError(data.error || "Ошибка при загрузке заказов");
-        }
-      } catch (err) {
-        console.error("Ошибка при загрузке заказов:", err);
-        setError("Не удалось загрузить заказы");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, [session?.user?.id]);
+  // Извлекаем массив заказов из ответа API
+  const orders: Order[] = Array.isArray((data as { orders?: Order[] })?.orders)
+    ? (data as { orders: Order[] }).orders
+    : Array.isArray(data)
+    ? (data as Order[])
+    : [];
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -78,6 +66,48 @@ export default function OrderHistory() {
   const formatPrice = (price: number) => {
     return price.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽";
   };
+
+  // Функция сортировки заказов
+  const getStatusPriority = (
+    status: string,
+    deliveredFirst: boolean
+  ): number => {
+    if (deliveredFirst) {
+      // Доставленные первыми
+      const priorities: Record<string, number> = {
+        DELIVERED: 1,
+        IN_FLIGHT: 2,
+        CONFIRMED: 3,
+        PENDING: 4,
+        CANCELLED: 5,
+      };
+      return priorities[status] || 99;
+    } else {
+      // По умолчанию: доставленные внизу
+      const priorities: Record<string, number> = {
+        IN_FLIGHT: 1, // В полете - первыми
+        CONFIRMED: 2, // В сборке
+        PENDING: 3, // Ожидание
+        DELIVERED: 4, // Доставленные - внизу
+        CANCELLED: 5, // Отмененные - последними
+      };
+      return priorities[status] || 99;
+    }
+  };
+
+  // Сортируем заказы
+  const sortedOrders: Order[] = [...orders].sort((a: Order, b: Order) => {
+    const deliveredFirst = sortOrder === "delivered-first";
+
+    // Сначала по приоритету статуса
+    const priorityDiff =
+      getStatusPriority(a.status, deliveredFirst) -
+      getStatusPriority(b.status, deliveredFirst);
+    if (priorityDiff !== 0) return priorityDiff;
+
+    // Затем по дате (новые первыми)
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 
   if (loading) {
     return (
@@ -111,7 +141,31 @@ export default function OrderHistory() {
 
   return (
     <div className="space-y-4">
-      {orders.map((order) => {
+      {/* Кнопка сортировки */}
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={() =>
+            setSortOrder(
+              sortOrder === "default" ? "delivered-first" : "default"
+            )
+          }
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm font-bold text-[#0D1B2A]"
+        >
+          {sortOrder === "delivered-first" ? (
+            <>
+              <ArrowDown size={16} />
+              <span>От доставленных</span>
+            </>
+          ) : (
+            <>
+              <ArrowUpDown size={16} />
+              <span>По дате</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {sortedOrders.map((order) => {
         const statusInfo = statusLabels[order.status] || statusLabels.PENDING;
 
         return (

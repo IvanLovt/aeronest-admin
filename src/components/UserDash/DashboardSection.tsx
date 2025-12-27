@@ -11,7 +11,11 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { useFetchWithAuth } from "@/hooks/useFetchWithAuth";
+import { useRouter, useParams } from "next/navigation";
+import { ShoppingCart } from "lucide-react";
 import OrderHistory from "./OrderHistory";
+import TableOrder from "./TableOrder";
 
 interface User {
   name: string;
@@ -19,8 +23,26 @@ interface User {
   level: number;
 }
 
+interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  count: number;
+  ves?: number;
+}
+
+interface Order {
+  id: string;
+  amount: number;
+  status: string;
+  items: OrderItem[];
+  createdAt: string;
+  address: string;
+}
+
 interface DashboardSectionProps {
   user?: User;
+  initialTab?: string;
 }
 
 interface StatCardProps {
@@ -89,12 +111,56 @@ function TableRow({ name, status, amount, color }: TableRowProps) {
 
 export default function DashboardSection({
   user: userProp,
+  initialTab,
 }: DashboardSectionProps) {
   const { data: session } = useSession();
+  const router = useRouter();
+  const params = useParams();
+
+  // Получаем вкладку из URL или пропсов
+  const tabFromUrl = params?.tab as string;
+  const defaultTab = initialTab || tabFromUrl || "overview";
+
   const [balance, setBalance] = useState<string>("0 ₽");
   const [balanceLoading, setBalanceLoading] = useState(true);
-  const [activeSection, setActiveSection] = useState<string>("overview");
+  const [activeSection, setActiveSection] = useState<string>(defaultTab);
   const [userLevel, setUserLevel] = useState<number>(1);
+
+  // Синхронизируем activeSection с URL
+  useEffect(() => {
+    if (tabFromUrl && tabFromUrl !== activeSection) {
+      setActiveSection(tabFromUrl);
+    }
+  }, [tabFromUrl, activeSection]);
+
+  // Функция для переключения вкладки с обновлением URL
+  const handleSectionChange = (section: string) => {
+    setActiveSection(section);
+    if (session?.user?.id) {
+      router.push(`/${session.user.id}/dashboard/${section}`);
+    }
+  };
+
+  // Загружаем заказы пользователя
+  const { data: ordersData } = useFetchWithAuth<{ orders: Order[] }>({
+    url: "/api/orders/my",
+  });
+
+  // Извлекаем последние 3 заказа
+  const orders: Order[] = Array.isArray(
+    (ordersData as { orders?: Order[] })?.orders
+  )
+    ? (ordersData as { orders: Order[] }).orders
+    : Array.isArray(ordersData)
+    ? (ordersData as Order[])
+    : [];
+
+  const recentOrders = orders
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+    .slice(0, 3);
 
   // Используем данные из сессии или переданные пропсы
   const user = userProp || {
@@ -164,7 +230,7 @@ export default function DashboardSection({
   }, [session?.user?.id]);
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-10 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto px-6 py-10 pb-40 animate-in fade-in duration-500">
       <div className="grid lg:grid-cols-4 gap-8">
         {/* Sidebar Navigation */}
         <div className="lg:col-span-1 space-y-2">
@@ -178,7 +244,7 @@ export default function DashboardSection({
           ].map((item, i) => (
             <button
               key={i}
-              onClick={() => setActiveSection(item.section)}
+              onClick={() => handleSectionChange(item.section)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all ${
                 activeSection === item.section
                   ? "bg-[#0A84FF] text-white shadow-lg shadow-blue-500/30"
@@ -288,7 +354,7 @@ export default function DashboardSection({
                     Последняя активность
                   </h3>
                   <button
-                    onClick={() => setActiveSection("orders")}
+                    onClick={() => handleSectionChange("orders")}
                     className="text-xs font-bold text-[#0A84FF] hover:underline"
                   >
                     Вся история
@@ -303,24 +369,80 @@ export default function DashboardSection({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    <TableRow
-                      name="Заказ #A7721 (Додо Пицца)"
-                      status="Выполнено"
-                      amount="-280 ₽"
-                      color="green"
-                    />
-                    <TableRow
-                      name="Пополнение через СБП"
-                      status="Зачислено"
-                      amount="+500 ₽"
-                      color="blue"
-                    />
-                    <TableRow
-                      name="Заказ #A7690 (Аптека 36.6)"
-                      status="Выполнено"
-                      amount="-120 ₽"
-                      color="green"
-                    />
+                    {recentOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-8 py-12 text-center">
+                          <div className="flex flex-col items-center gap-4">
+                            <ShoppingCart className="w-12 h-12 text-gray-300" />
+                            <div>
+                              <p className="font-bold text-[#0D1B2A] mb-2">
+                                Заказов пока нет
+                              </p>
+                              <p className="text-sm text-gray-500 mb-4">
+                                Сделайте свой первый заказ в каталоге
+                              </p>
+                              <button
+                                onClick={() => {
+                                  // Переходим в каталог пользователя
+                                  if (session?.user?.id) {
+                                    router.push(`/${session.user.id}/catalog`);
+                                  } else {
+                                    router.push("/");
+                                  }
+                                }}
+                                className="px-6 py-3 bg-[#0A84FF] text-white rounded-xl font-bold hover:bg-[#0971d1] transition-all"
+                              >
+                                Перейти в каталог
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      recentOrders.map((order) => {
+                        // Определяем статус и цвет
+                        const statusMap: Record<
+                          string,
+                          { label: string; color: string }
+                        > = {
+                          DELIVERED: { label: "Выполнено", color: "green" },
+                          IN_FLIGHT: { label: "В полете", color: "blue" },
+                          CONFIRMED: { label: "В сборке", color: "blue" },
+                          PENDING: { label: "Ожидание", color: "blue" },
+                          CANCELLED: { label: "Отменено", color: "green" },
+                        };
+
+                        const statusInfo =
+                          statusMap[order.status] || statusMap.PENDING;
+
+                        // Формируем название заказа из первого товара или ID
+                        const orderName =
+                          order.items.length > 0
+                            ? `Заказ #${order.id.slice(-6).toUpperCase()} (${
+                                order.items[0].name
+                              }${
+                                order.items.length > 1
+                                  ? ` +${order.items.length - 1}`
+                                  : ""
+                              })`
+                            : `Заказ #${order.id.slice(-6).toUpperCase()}`;
+
+                        // Форматируем сумму
+                        const formattedAmount = `-${order.amount
+                          .toFixed(0)
+                          .replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ₽`;
+
+                        return (
+                          <TableRow
+                            key={order.id}
+                            name={orderName}
+                            status={statusInfo.label}
+                            amount={formattedAmount}
+                            color={statusInfo.color}
+                          />
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -341,13 +463,17 @@ export default function DashboardSection({
             </div>
           )}
 
-          {activeSection !== "overview" && activeSection !== "orders" && (
-            <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm p-12 text-center">
-              <p className="text-gray-500">
-                Раздел &quot;{activeSection}&quot; в разработке
-              </p>
-            </div>
-          )}
+          {activeSection === "addresses" && <TableOrder />}
+
+          {activeSection !== "overview" &&
+            activeSection !== "orders" &&
+            activeSection !== "addresses" && (
+              <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm p-12 text-center">
+                <p className="text-gray-500">
+                  Раздел &quot;{activeSection}&quot; в разработке
+                </p>
+              </div>
+            )}
         </div>
       </div>
     </div>

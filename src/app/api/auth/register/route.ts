@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
+import { db, getPool } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password, name } = body;
+    const { email, password, name, referralCode } = body;
 
     // Валидация
     if (!email || !password) {
@@ -41,6 +41,71 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Пароль должен содержать минимум 6 символов" },
         { status: 400 }
+      );
+    }
+
+    // Проверка реферального кода (обязателен для регистрации)
+    if (!referralCode || !referralCode.trim()) {
+      return NextResponse.json(
+        { error: "Реферальный код обязателен для регистрации" },
+        { status: 400 }
+      );
+    }
+
+    const pool = getPool();
+    const refCodeUpper = referralCode.trim().toUpperCase();
+
+    try {
+      // Ищем реферальный код в таблице
+      const referralResult = await pool.query(
+        `SELECT id, user_id, referred_user_id, max_uses 
+         FROM referrals 
+         WHERE ref_code = $1`,
+        [refCodeUpper]
+      );
+
+      if (referralResult.rows.length === 0) {
+        return NextResponse.json(
+          { error: `Реферальный код "${refCodeUpper}" не найден` },
+          { status: 400 }
+        );
+      }
+
+      const referral = referralResult.rows[0];
+
+      // Проверяем количество использований
+      const usesCountResult = await pool.query(
+        `SELECT COUNT(*) as count 
+         FROM referral_uses 
+         WHERE referral_id = $1`,
+        [referral.id]
+      );
+
+      const usesCount = parseInt(usesCountResult.rows[0].count || "0", 10);
+      const maxUses = referral.max_uses
+        ? parseInt(referral.max_uses, 10)
+        : null;
+
+      // Проверяем, не превышен ли лимит использований
+      if (maxUses !== null && usesCount >= maxUses) {
+        return NextResponse.json(
+          {
+            error: `Реферальный код "${refCodeUpper}" достиг максимального количества использований (${maxUses})`,
+          },
+          { status: 400 }
+        );
+      }
+
+      console.log(
+        `✅ Реферальный код ${refCodeUpper} найден и валиден (использований: ${usesCount}${
+          maxUses ? `/${maxUses}` : "/∞"
+        })`
+      );
+    } catch (refError) {
+      console.error("❌ Ошибка при проверке реферального кода:", refError);
+      return NextResponse.json(
+        { error: "Ошибка при проверке реферального кода. Попробуйте позже." },
+        { status: 500 }
       );
     }
 
@@ -84,6 +149,82 @@ export async function POST(request: NextRequest) {
       .returning();
 
     console.log(`✅ Пользователь успешно создан: ${newUser.email}`);
+
+    // Обработка реферального кода
+    if (referralCode && referralCode.trim()) {
+      try {
+        const pool = getPool();
+        const refCodeUpper = referralCode.trim().toUpperCase();
+
+        // Ищем реферальный код
+        const referralResult = await pool.query(
+          `SELECT id, user_id, referred_user_id, max_uses 
+           FROM referrals 
+           WHERE ref_code = $1`,
+          [refCodeUpper]
+        );
+
+        if (referralResult.rows.length > 0) {
+          const referral = referralResult.rows[0];
+
+          // Проверяем количество использований перед добавлением нового
+          const usesCountResult = await pool.query(
+            `SELECT COUNT(*) as count 
+             FROM referral_uses 
+             WHERE referral_id = $1`,
+            [referral.id]
+          );
+
+          const currentUses = parseInt(
+            usesCountResult.rows[0].count || "0",
+            10
+          );
+          const maxUses = referral.max_uses
+            ? parseInt(referral.max_uses, 10)
+            : null;
+
+          // Проверяем лимит использований
+          if (maxUses !== null && currentUses >= maxUses) {
+            console.log(
+              `⚠️ Реферальный код ${refCodeUpper} достиг лимита использований`
+            );
+          } else {
+            // Добавляем запись об использовании в таблицу referral_uses
+            const { createId } = await import("@paralleldrive/cuid2");
+            const useId = createId();
+
+            await pool.query(
+              `INSERT INTO referral_uses (id, referral_id, user_id)
+               VALUES ($1, $2, $3)`,
+              [useId, referral.id, newUser.id]
+            );
+
+            // Для обратной совместимости обновляем referred_user_id, если он еще не установлен
+            if (!referral.referred_user_id) {
+              await pool.query(
+                `UPDATE referrals 
+                 SET referred_user_id = $1, date = NOW() 
+                 WHERE id = $2`,
+                [newUser.id, referral.id]
+              );
+            }
+
+            console.log(
+              `✅ Реферальный код ${refCodeUpper} применен для пользователя ${
+                newUser.id
+              } (использований: ${currentUses + 1}${
+                maxUses ? `/${maxUses}` : "/∞"
+              })`
+            );
+          }
+        } else {
+          console.log(`⚠️ Реферальный код ${refCodeUpper} не найден`);
+        }
+      } catch (refError) {
+        // Логируем ошибку, но не прерываем регистрацию
+        console.error("❌ Ошибка при обработке реферального кода:", refError);
+      }
+    }
 
     return NextResponse.json(
       {

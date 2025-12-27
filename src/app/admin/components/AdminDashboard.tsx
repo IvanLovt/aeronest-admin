@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { useFetch } from "@/hooks/useFetch";
+import { useFetchWithInterval } from "@/hooks/useFetchWithInterval";
 import {
   Download,
   Plus,
@@ -8,6 +11,7 @@ import {
   CheckCircle2,
   TrendingUp,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
 
 // Компонент KPI карточки
@@ -80,81 +84,127 @@ const AlertItem = ({
 
 // Компонент статуса заказа
 const StatusBadge = ({ status }: { status: string }) => {
+  // Нормализуем статус к нижнему регистру для стилей
+  const normalizedStatus = status.toLowerCase();
+
   const statusClasses: Record<string, string> = {
-    completed: "bg-green-500/20 text-green-400 border-green-500/30",
+    delivered: "bg-green-500/20 text-green-400 border-green-500/30",
     pending: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    in_progress: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    in_flight: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    confirmed: "bg-purple-500/20 text-purple-400 border-purple-500/30",
     cancelled: "bg-red-500/20 text-red-400 border-red-500/30",
   };
 
   const statusLabels: Record<string, string> = {
-    completed: "Завершен",
+    delivered: "Доставлен",
     pending: "Ожидает",
-    in_progress: "В пути",
+    in_flight: "В полете",
+    confirmed: "Подтвержден",
     cancelled: "Отменен",
   };
 
   return (
     <span
       className={`px-3 py-1 rounded-full text-[10px] font-bold border ${
-        statusClasses[status] || statusClasses.pending
+        statusClasses[normalizedStatus] || statusClasses.pending
       }`}
     >
-      {statusLabels[status] || status}
+      {statusLabels[normalizedStatus] || status}
     </span>
   );
 };
 
-// Мок данные заказов
-const MOCK_ORDERS = [
-  {
-    id: "ORD-2024-001",
-    user: "Иван Петров",
-    address: "ул. Ленина, 15",
-    drone: "DRN-012",
-    status: "completed",
-    amount: "1,250",
-    time: "10:24",
-  },
-  {
-    id: "ORD-2024-002",
-    user: "Мария Сидорова",
-    address: "пр. Мира, 42",
-    drone: "DRN-008",
-    status: "in_progress",
-    amount: "890",
-    time: "10:18",
-  },
-  {
-    id: "ORD-2024-003",
-    user: "Алексей Козлов",
-    address: "ул. Пушкина, 7",
-    drone: "DRN-005",
-    status: "pending",
-    amount: "2,100",
-    time: "10:05",
-  },
-  {
-    id: "ORD-2024-004",
-    user: "Елена Волкова",
-    address: "пр. Гагарина, 33",
-    drone: "DRN-003",
-    status: "completed",
-    amount: "1,750",
-    time: "09:52",
-  },
-  {
-    id: "ORD-2024-005",
-    user: "Дмитрий Соколов",
-    address: "ул. Садовая, 21",
-    drone: "DRN-009",
-    status: "in_progress",
-    amount: "950",
-    time: "09:45",
-  },
-];
+interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  ves?: string;
+}
 
-export default function AdminDashboard() {
+interface Order {
+  id: string;
+  amount: number;
+  status: string;
+  items: OrderItem[];
+  createdAt: string;
+  user: string;
+  userEmail?: string;
+  address: string;
+  addressTitle?: string;
+  time: string;
+}
+
+interface DashboardStats {
+  activeOrders: number;
+  activeUsers: number;
+  successRate: string;
+  revenue24h: number;
+  revenueChange: string;
+  recentActiveOrders: string;
+  newUsersToday: string;
+  totalDelivered: string;
+}
+
+export default function AdminDashboard({
+  onNavigateToOrders,
+}: {
+  onNavigateToOrders?: () => void;
+}) {
+  const [lastUpdated, setLastUpdated] = useState<string>("");
+
+  const { data: recentOrdersData, loading: ordersLoadingState } = useFetch<{
+    orders: Order[];
+  }>({
+    url: "/api/admin/orders/recent",
+    onSuccess: () => {
+      const now = new Date();
+      setLastUpdated(
+        now.toLocaleString("ru-RU", {
+          day: "2-digit",
+          month: "long",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      );
+    },
+  });
+
+  const { data: statsData, loading: statsLoadingState } = useFetchWithInterval<{
+    stats: DashboardStats;
+  }>({
+    url: "/api/admin/dashboard/stats",
+    interval: 30000,
+    onSuccess: () => {
+      const now = new Date();
+      setLastUpdated(
+        now.toLocaleString("ru-RU", {
+          day: "2-digit",
+          month: "long",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      );
+    },
+  });
+
+  // Извлекаем данные из ответов API
+  const recentOrders: Order[] = Array.isArray(
+    (recentOrdersData as { orders?: Order[] })?.orders
+  )
+    ? (recentOrdersData as { orders: Order[] }).orders
+    : Array.isArray(recentOrdersData)
+    ? (recentOrdersData as Order[])
+    : [];
+
+  const stats: DashboardStats | null =
+    (statsData as { stats?: DashboardStats })?.stats || null;
+
+  const formatAmount = (amount: number) => {
+    return amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  };
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex items-end justify-between">
@@ -162,7 +212,9 @@ export default function AdminDashboard() {
           <h1 className="text-3xl font-bold mb-2 text-white">
             Здоровье системы
           </h1>
-          <p className="text-white/40 text-sm">Обновлено: сегодня, 11:24:05</p>
+          <p className="text-white/40 text-sm">
+            {lastUpdated ? `Обновлено: ${lastUpdated}` : "Загрузка..."}
+          </p>
         </div>
         <div className="flex gap-2">
           <button className="p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors text-white">
@@ -176,34 +228,52 @@ export default function AdminDashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPICard
-          label="Активных заказов"
-          value="24"
-          trend="+2 за 10 мин"
-          icon={Package}
-          color="blue"
-        />
-        <KPICard
-          label="Активных пользователей"
-          value="842"
-          trend="+14 сегодня"
-          icon={Users}
-          color="indigo"
-        />
-        <KPICard
-          label="Доставки (успех)"
-          value="98.7%"
-          trend="1 893 всего"
-          icon={CheckCircle2}
-          color="green"
-        />
-        <KPICard
-          label="Выручка 24ч"
-          value="₽42 310"
-          trend="+12% к вчера"
-          icon={TrendingUp}
-          color="orange"
-        />
+        {statsLoadingState ? (
+          <>
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-lg animate-pulse"
+              >
+                <div className="h-12 w-12 bg-gray-700 rounded-xl mb-4"></div>
+                <div className="h-8 bg-gray-700 rounded mb-2"></div>
+                <div className="h-4 bg-gray-700 rounded mb-2"></div>
+                <div className="h-3 bg-gray-700 rounded w-2/3"></div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            <KPICard
+              label="Активных заказов"
+              value={stats?.activeOrders.toString() || "0"}
+              trend={stats?.recentActiveOrders || "Без изменений"}
+              icon={Package}
+              color="blue"
+            />
+            <KPICard
+              label="Активных пользователей"
+              value={stats?.activeUsers.toString() || "0"}
+              trend={stats?.newUsersToday || "0 сегодня"}
+              icon={Users}
+              color="indigo"
+            />
+            <KPICard
+              label="Доставки (успех)"
+              value={stats?.successRate || "0%"}
+              trend={stats?.totalDelivered || "0 всего"}
+              icon={CheckCircle2}
+              color="green"
+            />
+            <KPICard
+              label="Выручка 24ч"
+              value={`₽${stats ? formatAmount(stats.revenue24h) : "0"}`}
+              trend={stats?.revenueChange || "Нет данных"}
+              icon={TrendingUp}
+              color="orange"
+            />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -260,57 +330,69 @@ export default function AdminDashboard() {
       <div className="bg-[#141f3a] rounded-[40px] border border-white/5 shadow-2xl overflow-hidden">
         <div className="p-8 flex justify-between items-center border-b border-white/5">
           <h3 className="text-xl font-bold text-white">Последние заказы</h3>
-          <button className="text-blue-400 text-sm font-bold flex items-center gap-2">
+          <button
+            onClick={onNavigateToOrders}
+            className="text-blue-400 text-sm font-bold flex items-center gap-2 hover:text-blue-300 transition-colors"
+          >
             Все заказы <ArrowRight size={16} />
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] border-b border-white/5">
-                <th className="px-8 py-6">ID / Пользователь</th>
-                <th className="px-8 py-6">Адрес</th>
-                <th className="px-8 py-6">Дрон</th>
-                <th className="px-8 py-6">Статус</th>
-                <th className="px-8 py-6">Сумма</th>
-                <th className="px-8 py-6">Время</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {MOCK_ORDERS.map((order) => (
-                <tr
-                  key={order.id}
-                  className="hover:bg-white/5 transition-colors cursor-pointer group"
-                >
-                  <td className="px-8 py-5">
-                    <div className="font-mono text-blue-400 text-xs mb-1">
-                      {order.id}
-                    </div>
-                    <div className="font-bold text-sm text-white">
-                      {order.user}
-                    </div>
-                  </td>
-                  <td className="px-8 py-5 text-sm text-white/50">
-                    {order.address}
-                  </td>
-                  <td className="px-8 py-5">
-                    <span className="px-3 py-1 bg-white/5 rounded-full text-[10px] font-bold border border-white/10 text-white">
-                      {order.drone}
-                    </span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <StatusBadge status={order.status} />
-                  </td>
-                  <td className="px-8 py-5 font-mono font-bold text-white">
-                    ₽{order.amount}
-                  </td>
-                  <td className="px-8 py-5 text-xs text-white/30">
-                    {order.time}
-                  </td>
+          {ordersLoadingState ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+            </div>
+          ) : recentOrders.length === 0 ? (
+            <div className="px-8 py-12 text-center">
+              <p className="text-white/50 font-bold">Заказов пока нет</p>
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] border-b border-white/5">
+                  <th className="px-8 py-6">ID / Пользователь</th>
+                  <th className="px-8 py-6">Адрес</th>
+                  <th className="px-8 py-6">Статус</th>
+                  <th className="px-8 py-6">Сумма</th>
+                  <th className="px-8 py-6">Время</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {recentOrders.map((order) => (
+                  <tr
+                    key={order.id}
+                    className="hover:bg-white/5 transition-colors cursor-pointer group"
+                  >
+                    <td className="px-8 py-5">
+                      <div className="font-mono text-blue-400 text-xs mb-1">
+                        {order.id.slice(-8)}
+                      </div>
+                      <div className="font-bold text-sm text-white">
+                        {order.user}
+                      </div>
+                      {order.userEmail && (
+                        <div className="text-xs text-white/30 mt-1">
+                          {order.userEmail}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-8 py-5 text-sm text-white/50">
+                      {order.address}
+                    </td>
+                    <td className="px-8 py-5">
+                      <StatusBadge status={order.status} />
+                    </td>
+                    <td className="px-8 py-5 font-mono font-bold text-white">
+                      ₽{formatAmount(order.amount)}
+                    </td>
+                    <td className="px-8 py-5 text-xs text-white/30">
+                      {order.time}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

@@ -46,9 +46,10 @@ export async function GET() {
       id: result.rows[0].id,
       amount: parseFloat(result.rows[0].amount),
       status: result.rows[0].status,
-      items: typeof result.rows[0].items === "string" 
-        ? JSON.parse(result.rows[0].items) 
-        : result.rows[0].items,
+      items:
+        typeof result.rows[0].items === "string"
+          ? JSON.parse(result.rows[0].items)
+          : result.rows[0].items,
       createdAt: result.rows[0].created_at,
       address: result.rows[0].address || "Адрес не указан",
     };
@@ -69,4 +70,3 @@ export async function GET() {
     );
   }
 }
-

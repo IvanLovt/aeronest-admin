@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { Navigation, User } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
+import { useRouter, usePathname } from "next/navigation";
 import GradientText from "./GradientText";
 import AuthModal from "./AuthModal";
 
 interface HeaderProps {
   isScrolled: boolean;
-  setActiveTab: (tab: string) => void;
-  activeTab: string;
+  setActiveTab?: (tab: string) => void;
+  activeTab?: string;
   userName: string;
+  useUrlNavigation?: boolean;
 }
 
 export default function Header({
@@ -18,12 +20,36 @@ export default function Header({
   setActiveTab,
   activeTab,
   userName,
+  useUrlNavigation = false,
 }: HeaderProps) {
   const { data: session } = useSession();
+  const router = useRouter();
+  const pathname = usePathname();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
 
   const displayName = session?.user?.name || userName;
+
+  const handleNavigation = (tab: string) => {
+    // Если пользователь авторизован, всегда используем URL-навигацию с его ID
+    if (session?.user?.id) {
+      if (tab === "home") {
+        router.push("/");
+      } else if (tab === "catalog") {
+        router.push(`/${session.user.id}/catalog`);
+      } else if (tab === "dashboard") {
+        router.push(`/${session.user.id}/dashboard`);
+      }
+    } else if (useUrlNavigation) {
+      // Если URL-навигация включена, но пользователь не авторизован
+      if (tab === "home") {
+        router.push("/");
+      }
+    } else if (setActiveTab) {
+      // Используем старую логику с табами (только для неавторизованных на главной)
+      setActiveTab(tab);
+    }
+  };
   return (
     <nav
       className={`fixed top-0 w-full z-50 transition-all duration-300 ${
@@ -35,7 +61,7 @@ export default function Header({
       <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
         <div
           className="flex items-center gap-2 cursor-pointer"
-          onClick={() => setActiveTab("home")}
+          onClick={() => handleNavigation("home")}
         >
           <div className="w-10 h-10 bg-[#0A84FF] rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
             <Navigation className="rotate-45" size={24} strokeWidth={2.5} />
@@ -47,9 +73,11 @@ export default function Header({
 
         <div className="hidden md:flex items-center gap-8 text-sm font-medium text-[#0D1B2A]/70">
           <button
-            onClick={() => setActiveTab("home")}
+            onClick={() => handleNavigation("home")}
             className={`hover:text-[#0A84FF] transition-colors ${
-              activeTab === "home" ? "text-[#0A84FF]" : ""
+              (useUrlNavigation ? pathname === "/" : activeTab === "home")
+                ? "text-[#0A84FF]"
+                : ""
             }`}
           >
             <GradientText
@@ -62,15 +90,21 @@ export default function Header({
             </GradientText>
           </button>
           <button
-            onClick={() => setActiveTab("catalog")}
+            onClick={() => handleNavigation("catalog")}
             className={`hover:text-[#0A84FF] transition-colors ${
-              activeTab === "catalog" ? "text-[#0A84FF]" : ""
+              (
+                useUrlNavigation
+                  ? pathname?.includes("/catalog")
+                  : activeTab === "catalog"
+              )
+                ? "text-[#0A84FF]"
+                : ""
             }`}
           >
             Каталог
           </button>
           <button
-            onClick={() => setActiveTab("busnes")}
+            onClick={() => (setActiveTab ? setActiveTab("busnes") : null)}
             className={`hover:text-[#0A84FF] transition-colors ${
               activeTab === "busnes" ? "text-[#0A84FF]" : ""
             }`}
@@ -86,7 +120,7 @@ export default function Header({
           {session ? (
             <>
               <button
-                onClick={() => setActiveTab("dashboard")}
+                onClick={() => handleNavigation("dashboard")}
                 className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 hover:border-[#0A84FF] transition-all bg-white shadow-sm"
               >
                 <User size={18} className="text-[#0A84FF]" />
@@ -130,7 +164,13 @@ export default function Header({
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         defaultMode={authMode}
-        onSuccess={() => setActiveTab("dashboard")}
+        onSuccess={() => {
+          if (useUrlNavigation && session?.user?.id) {
+            router.push(`/${session.user.id}/dashboard`);
+          } else if (setActiveTab) {
+            setActiveTab("dashboard");
+          }
+        }}
       />
     </nav>
   );

@@ -3,6 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useFetchWithInterval } from "@/hooks/useFetchWithInterval";
 import {
   Shield,
   Users,
@@ -11,11 +12,13 @@ import {
   Package,
   Wallet,
   Navigation,
+  UserPlus,
 } from "lucide-react";
 import AdminDashboard from "./components/AdminDashboard";
 import AdminUsers from "./components/AdminUsers";
 import AdminDrones from "./components/AdminDrones";
 import AllOrders from "./components/AllOrders";
+import ReferalOption from "./components/ReferalOption";
 const AdminSidebarItem = ({
   icon: Icon,
   label,
@@ -66,12 +69,35 @@ export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [section, setSection] = useState("dashboard");
+  const [confirmedOrdersCount, setConfirmedOrdersCount] = useState<
+    number | null
+  >(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/");
     }
   }, [status, router]);
+
+  // Загружаем количество заказов со статусом CONFIRMED
+  const { data: confirmedCountData } = useFetchWithInterval<{
+    confirmedCount: number;
+  }>({
+    url: "/api/admin/orders/stats",
+    interval: 30000,
+    enabled: session?.user?.email === "admin@example.com",
+    dependencies: [session?.user?.email],
+  });
+
+  useEffect(() => {
+    if (confirmedCountData) {
+      const count = (confirmedCountData as { confirmedCount?: number })
+        ?.confirmedCount;
+      if (count !== undefined) {
+        setConfirmedOrdersCount(count);
+      }
+    }
+  }, [confirmedCountData]);
 
   if (status === "loading") {
     return (
@@ -157,13 +183,23 @@ export default function AdminPage() {
               label="Заказы"
               active={section === "orders"}
               onClick={() => setSection("orders")}
-              badge="7"
+              badge={
+                confirmedOrdersCount !== null && confirmedOrdersCount > 0
+                  ? confirmedOrdersCount.toString()
+                  : undefined
+              }
             />
             <AdminSidebarItem
               icon={Navigation}
               label="Дроны"
               active={section === "drones"}
               onClick={() => setSection("drones")}
+            />
+            <AdminSidebarItem
+              icon={UserPlus}
+              label="Рефералы"
+              active={section === "referrals"}
+              onClick={() => setSection("referrals")}
             />
             <AdminSidebarItem
               icon={Wallet}
@@ -197,11 +233,14 @@ export default function AdminPage() {
 
           {/* Main Admin Area */}
           <div className="flex-1 space-y-8">
-            {section === "dashboard" && <AdminDashboard />}
+            {section === "dashboard" && (
+              <AdminDashboard onNavigateToOrders={() => setSection("orders")} />
+            )}
             {section === "users" && <AdminUsers />}
 
             {section === "orders" && <AllOrders />}
             {section === "drones" && <AdminDrones />}
+            {section === "referrals" && <ReferalOption />}
             {section === "finance" && (
               <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-lg">
                 <h2 className="text-xl font-bold text-white mb-4">Финансы</h2>

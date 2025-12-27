@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import {
   Navigation,
   MessageCircle,
@@ -15,8 +17,11 @@ import {
 } from "lucide-react";
 
 interface FooterProps {
-  onNavigate: (tab: string) => void;
+  onNavigate?: (tab: string) => void;
+  useUrlNavigation?: boolean;
 }
+
+export type { FooterProps };
 
 const FooterSocialIcon = ({
   icon: Icon,
@@ -31,8 +36,25 @@ const FooterSocialIcon = ({
   </a>
 );
 
-export default function Footer({ onNavigate }: FooterProps) {
+export default function Footer({
+  onNavigate,
+  useUrlNavigation = false,
+}: FooterProps) {
+  const { data: session } = useSession();
+  const router = useRouter();
   const [phoneHovered, setPhoneHovered] = useState(false);
+
+  const handleNavigation = (tab: string) => {
+    if (useUrlNavigation && session?.user?.id) {
+      if (tab === "home") {
+        router.push("/");
+      } else if (tab === "catalog") {
+        router.push(`/${session.user.id}/catalog`);
+      }
+    } else if (onNavigate) {
+      onNavigate(tab);
+    }
+  };
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -93,9 +115,9 @@ export default function Footer({ onNavigate }: FooterProps) {
                 <button
                   onClick={() =>
                     item === "Главная"
-                      ? onNavigate("home")
+                      ? handleNavigation("home")
                       : item === "Каталог магазинов"
-                      ? onNavigate("catalog")
+                      ? handleNavigation("catalog")
                       : null
                   }
                   className="text-white/60 text-sm hover:text-[#0A84FF] hover:underline decoration-2 underline-offset-4 transition-all"
@@ -134,7 +156,7 @@ export default function Footer({ onNavigate }: FooterProps) {
               onMouseEnter={() => setPhoneHovered(true)}
               onMouseLeave={() => setPhoneHovered(false)}
             >
-              <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[#0A84FF] border border-white/10 group-hover:scale-110 transition-transform">
+              <div className="w-8 h-8 z-0 rounded-full bg-white/5 flex items-center justify-center text-[#0A84FF] border border-white/10 group-hover:scale-110 transition-transform">
                 <Phone size={14} />
               </div>
               <span className="text-sm font-bold tracking-wider transition-all">
@@ -142,7 +164,7 @@ export default function Footer({ onNavigate }: FooterProps) {
               </span>
             </div>
             <div className="flex items-center gap-3 group cursor-pointer">
-              <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[#0A84FF] border border-white/10 group-hover:scale-110 transition-transform">
+              <div className="w-8 h-8  z-0   rounded-full bg-white/5 flex items-center justify-center text-[#0A84FF] border border-white/10 group-hover:scale-110 transition-transform">
                 <Mail size={14} />
               </div>
               <span className="text-sm text-white/60 group-hover:text-white transition-colors">

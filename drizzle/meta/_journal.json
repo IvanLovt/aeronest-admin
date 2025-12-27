@@ -22,6 +22,27 @@
       "when": 1766753030914,
       "tag": "0002_melodic_typhoid_mary",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1766828277275,
+      "tag": "0003_fluffy_vulcan",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1766837167568,
+      "tag": "0004_friendly_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1766838932774,
+      "tag": "0005_mighty_absorbing_man",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, MinusCircle, ShoppingBag, AlertCircle } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  X,
+  MinusCircle,
+  ShoppingBag,
+  AlertCircle,
+  MapPin,
+  ChevronDown,
+} from "lucide-react";
 import { useSession } from "next-auth/react";
 import ItemCart from "./ItemCart";
 
@@ -28,6 +35,18 @@ interface Item {
   ves: string;
 }
 
+interface Address {
+  id: string;
+  title: string;
+  street: string;
+  building: string | null;
+  entrance: string | null;
+  floor: string | null;
+  apartment: string | null;
+  comment: string | null;
+  isDefault: boolean;
+}
+
 export default function WindowCart({
   isOpen,
   onClose,
@@ -37,11 +56,19 @@ export default function WindowCart({
   const { data: session } = useSession();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [address, setAddress] = useState("");
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
+    null
+  );
   const [deliveryTime, setDeliveryTime] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
+  const addressInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Загружаем товары из БД при открытии модального окна
   useEffect(() => {
@@ -72,6 +99,89 @@ export default function WindowCart({
       setItems([]);
     }
   }, [isOpen, catalogId]);
+
+  // Загружаем адреса пользователя при открытии модального окна
+  useEffect(() => {
+    if (isOpen && session?.user?.id) {
+      const fetchAddresses = async () => {
+        setAddressesLoading(true);
+        try {
+          const response = await fetch("/api/user/addresses");
+          const data = await response.json();
+
+          if (data.success && data.addresses) {
+            setAddresses(data.addresses);
+            // Устанавливаем адрес по умолчанию, если есть
+            const defaultAddress = data.addresses.find(
+              (addr: Address) => addr.isDefault
+            );
+            if (defaultAddress) {
+              setAddress(formatAddress(defaultAddress));
+              setSelectedAddressId(defaultAddress.id);
+            }
+          } else {
+            setAddresses([]);
+          }
+        } catch (error) {
+          console.error("Ошибка при загрузке адресов:", error);
+          setAddresses([]);
+        } finally {
+          setAddressesLoading(false);
+        }
+      };
+
+      fetchAddresses();
+    } else if (!isOpen) {
+      setAddresses([]);
+      setIsAddressDropdownOpen(false);
+    }
+  }, [isOpen, session?.user?.id]);
+
+  // Закрываем выпадающее меню при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        addressInputRef.current &&
+        !addressInputRef.current.contains(event.target as Node)
+      ) {
+        setIsAddressDropdownOpen(false);
+      }
+    };
+
+    if (isAddressDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isAddressDropdownOpen]);
+
+  // Функция форматирования адреса
+  const formatAddress = (addr: Address) => {
+    const parts = [addr.street];
+    if (addr.building) parts.push(`д. ${addr.building}`);
+    if (addr.entrance) parts.push(`подъезд ${addr.entrance}`);
+    if (addr.floor) parts.push(`эт. ${addr.floor}`);
+    if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
+    return parts.join(", ");
+  };
+
+  // Обработчик выбора адреса
+  const handleAddressSelect = (selectedAddress: Address) => {
+    setAddress(formatAddress(selectedAddress));
+    setSelectedAddressId(selectedAddress.id);
+    setIsAddressDropdownOpen(false);
+  };
+
+  // Обработчик изменения адреса вручную
+  const handleAddressChange = (value: string) => {
+    setAddress(value);
+    // Если адрес изменен вручную, сбрасываем ID выбранного адреса
+    setSelectedAddressId(null);
+  };
 
   const addToCart = (item: Omit<CartItem, "count">) => {
     setCart((prevCart) => {
@@ -180,6 +290,7 @@ export default function WindowCart({
         },
         body: JSON.stringify({
           address,
+          addressId: selectedAddressId, // Передаем ID адреса, если он был выбран из списка
           items: cart.map((item) => ({
             id: item.id,
             name: item.name,
@@ -218,6 +329,7 @@ export default function WindowCart({
       // Очистка формы после отправки
       setCart([]);
       setAddress("");
+      setSelectedAddressId(null);
       setDeliveryTime("");
       setError(null);
       onClose();
@@ -258,17 +370,88 @@ export default function WindowCart({
         <div className="p-8 grid md:grid-cols-2 gap-8 max-h-[70vh] overflow-y-auto">
           {/* Form Side */}
           <div className="space-y-6">
-            <div>
+            <div className="relative">
               <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
                 Адрес доставки
               </label>
-              <input
-                type="text"
-                placeholder="ул. Адмиралтейская, 1"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none transition-all font-medium"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
+              <div className="relative">
+                <input
+                  ref={addressInputRef}
+                  type="text"
+                  placeholder="ул. Адмиралтейская, 1"
+                  className="w-full px-4 py-3 pr-10 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none transition-all font-medium"
+                  value={address}
+                  onChange={(e) => handleAddressChange(e.target.value)}
+                  onFocus={() => setIsAddressDropdownOpen(true)}
+                  onClick={() => setIsAddressDropdownOpen(true)}
+                />
+                {addresses.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setIsAddressDropdownOpen(!isAddressDropdownOpen)
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <ChevronDown
+                      size={18}
+                      className={`transition-transform ${
+                        isAddressDropdownOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                )}
+              </div>
+
+              {/* Выпадающее меню с адресами */}
+              {isAddressDropdownOpen && addresses.length > 0 && (
+                <div
+                  ref={dropdownRef}
+                  className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto"
+                >
+                  {addresses.map((addr) => (
+                    <button
+                      key={addr.id}
+                      type="button"
+                      onClick={() => handleAddressSelect(addr)}
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0"
+                    >
+                      <div className="flex items-start gap-3">
+                        <MapPin
+                          size={16}
+                          className="text-blue-600 mt-0.5 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-bold text-[#0D1B2A]">
+                              {addr.title}
+                            </span>
+                            {addr.isDefault && (
+                              <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-bold">
+                                По умолчанию
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-600 truncate">
+                            {formatAddress(addr)}
+                          </p>
+                          {addr.comment && (
+                            <p className="text-[10px] text-gray-400 mt-1 italic truncate">
+                              {addr.comment}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {addressesLoading && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Загрузка адресов...
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">

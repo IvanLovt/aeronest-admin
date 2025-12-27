@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Navigation, Activity, Package } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import HomeSection from "@/components/HomeSection";
 import CatalogSection from "@/components/CatalogSection";
 import DashboardSection from "../components/UserDash/DashboardSection";
@@ -24,10 +25,28 @@ interface ActiveOrder {
 
 export default function Home() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("home");
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
+
+  // Функция для навигации с учетом авторизации
+  const handleTabChange = (tab: string) => {
+    if (session?.user?.id) {
+      // Если пользователь авторизован, используем URL-навигацию
+      if (tab === "catalog") {
+        router.push(`/${session.user.id}/catalog`);
+      } else if (tab === "dashboard") {
+        router.push(`/${session.user.id}/dashboard`);
+      } else {
+        setActiveTab(tab);
+      }
+    } else {
+      // Если не авторизован, используем табы
+      setActiveTab(tab);
+    }
+  };
 
   // Используем данные из сессии или дефолтные значения
   const user = {
@@ -42,7 +61,7 @@ export default function Home() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Загружаем активный заказ пользователя
+  // Загружаем активный заказ пользователя только один раз при входе
   useEffect(() => {
     const fetchActiveOrder = async () => {
       if (!session?.user?.id) {
@@ -69,9 +88,6 @@ export default function Home() {
     };
 
     fetchActiveOrder();
-    // Обновляем каждые 10 секунд для актуальной информации
-    const interval = setInterval(fetchActiveOrder, 10000);
-    return () => clearInterval(interval);
   }, [session?.user?.id]);
 
   const getStatusLabel = (status: string) => {
@@ -97,7 +113,7 @@ export default function Home() {
 
   return (
     <div
-      className={`min-h-screen font-sans transition-colors duration-300 ${
+      className={`min-h-screen font-sans transition-colors duration-300 flex flex-col ${
         activeTab === "home" ? "bg-[#F8FAFC]" : "bg-gray-50"
       }`}
     >
@@ -121,7 +137,13 @@ export default function Home() {
       {activeOrder && !orderLoading && (
         <div
           className="fixed bottom-8 left-8 p-3 bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200 shadow-xl hidden lg:block cursor-pointer hover:bg-white transition-all group z-50"
-          onClick={() => setActiveTab("dashboard")}
+          onClick={() => {
+            if (session?.user?.id) {
+              router.push(`/${session.user.id}/dashboard`);
+            } else {
+              setActiveTab("dashboard");
+            }
+          }}
         >
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -157,10 +179,10 @@ export default function Home() {
         </div>
       )}
       {/* Main Content Area */}
-      <main className="pt-20 relative z-10">
+      <main className="pt-20  relative z-10 flex-1">
         {activeTab === "home" && (
           <>
-            <HomeSection onStart={() => setActiveTab("catalog")} />
+            <HomeSection onStart={() => handleTabChange("catalog")} />
             <AeroNestSection />
             <EnergyTransparencySection />
             <GreenMissionSection />

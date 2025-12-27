@@ -29,6 +29,7 @@ export default function AuthModal({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -45,6 +46,7 @@ export default function AuthModal({
       setEmail("");
       setPassword("");
       setName("");
+      setReferralCode("");
     }
   }, [isOpen]);
 
@@ -61,7 +63,12 @@ export default function AuthModal({
         const response = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name }),
+          body: JSON.stringify({
+            email,
+            password,
+            name,
+            referralCode: referralCode.trim() || null,
+          }),
         });
 
         // Проверяем, что ответ содержит данные
@@ -116,8 +123,27 @@ export default function AuthModal({
             "🔐 Админ обнаружен после регистрации, редирект на /admin"
           );
           window.location.href = "/admin";
-        } else if (onSuccess) {
-          setTimeout(() => onSuccess(), 100);
+        } else {
+          // После успешной регистрации получаем ID пользователя и перенаправляем
+          setTimeout(async () => {
+            try {
+              // Обновляем сессию, чтобы получить user.id
+              const response = await fetch("/api/auth/session");
+              const sessionData = await response.json();
+
+              if (sessionData?.user?.id) {
+                // Перенаправляем на дашборд с ID пользователя в URL
+                window.location.href = `/${sessionData.user.id}/dashboard`;
+              } else if (onSuccess) {
+                onSuccess();
+              }
+            } catch (error) {
+              console.error("Ошибка при получении сессии:", error);
+              if (onSuccess) {
+                onSuccess();
+              }
+            }
+          }, 500);
         }
       } else {
         // Вход
@@ -157,8 +183,27 @@ export default function AuthModal({
             setTimeout(() => {
               window.location.href = "/admin";
             }, 500);
-          } else if (onSuccess) {
-            setTimeout(() => onSuccess(), 100);
+          } else {
+            // После успешной авторизации получаем ID пользователя и перенаправляем
+            setTimeout(async () => {
+              try {
+                // Обновляем сессию, чтобы получить user.id
+                const response = await fetch("/api/auth/session");
+                const sessionData = await response.json();
+
+                if (sessionData?.user?.id) {
+                  // Перенаправляем на дашборд с ID пользователя в URL
+                  window.location.href = `/${sessionData.user.id}/dashboard`;
+                } else if (onSuccess) {
+                  onSuccess();
+                }
+              } catch (error) {
+                console.error("Ошибка при получении сессии:", error);
+                if (onSuccess) {
+                  onSuccess();
+                }
+              }
+            }, 500);
           }
         } catch (signInError) {
           console.error("❌ Ошибка при вызове signIn:", signInError);
@@ -230,6 +275,30 @@ export default function AuthModal({
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent outline-none transition-all"
                   placeholder="Введите ваше имя"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Реферальный код <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <UserIcon
+                    size={20}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    type="text"
+                    value={referralCode}
+                    onChange={(e) =>
+                      setReferralCode(e.target.value.toUpperCase())
+                    }
+                    required
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent outline-none transition-all uppercase"
+                    placeholder="Введите реферальный код"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Код должен существовать в системе и не быть использованным
+                </p>
               </div>
             </div>
           )}

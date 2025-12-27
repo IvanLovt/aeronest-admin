@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id;
     const body = await request.json();
-    const { address, items, amount } = body;
+    const { address, addressId: providedAddressId, items, amount } = body;
 
     // Валидация
     if (!address || !items || !Array.isArray(items) || items.length === 0) {
@@ -36,36 +36,59 @@ export async function POST(request: NextRequest) {
 
     const pool = getPool();
 
-    // Создаем или находим адрес доставки
-    // Сначала проверяем, есть ли уже такой адрес у пользователя
-    const addressResult = await pool.query(
-      `SELECT id FROM delivery_addresses 
-       WHERE user_id = $1 AND street = $2 
-       LIMIT 1`,
-      [userId, address]
-    );
-
     let addressId: string;
 
-    if (addressResult.rows.length > 0) {
-      // Используем существующий адрес
-      addressId = addressResult.rows[0].id;
-    } else {
-      // Создаем новый адрес доставки
-      addressId = createId();
-      await pool.query(
-        `INSERT INTO delivery_addresses 
-         (id, user_id, title, street, is_default, coords) 
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          addressId,
-          userId,
-          "Адрес доставки",
-          address,
-          false,
-          "[]", // Пустые координаты, можно будет обновить позже
-        ]
+    // Если передан ID адреса (адрес выбран из списка), используем его
+    if (providedAddressId) {
+      // Проверяем, что адрес принадлежит пользователю
+      const addressCheck = await pool.query(
+        `SELECT id FROM delivery_addresses 
+         WHERE id = $1 AND user_id = $2`,
+        [providedAddressId, userId]
       );
+
+      if (addressCheck.rows.length > 0) {
+        addressId = providedAddressId;
+      } else {
+        return NextResponse.json(
+          { success: false, error: "Адрес не найден или не принадлежит вам" },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Если ID не передан, проверяем, есть ли уже такой адрес у пользователя
+      // Парсим адрес для поиска по компонентам
+      const addressParts = address.split(",").map((part: string) => part.trim());
+      const street = addressParts[0] || address;
+
+      // Ищем адрес по улице (основной компонент)
+      const addressResult = await pool.query(
+        `SELECT id FROM delivery_addresses 
+         WHERE user_id = $1 AND street = $2 
+         LIMIT 1`,
+        [userId, street]
+      );
+
+      if (addressResult.rows.length > 0) {
+        // Используем существующий адрес
+        addressId = addressResult.rows[0].id;
+      } else {
+        // Создаем новый адрес доставки только если его нет
+        addressId = createId();
+        await pool.query(
+          `INSERT INTO delivery_addresses 
+           (id, user_id, title, street, is_default, coords) 
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            addressId,
+            userId,
+            "Адрес доставки",
+            address, // Сохраняем полный адрес в поле street
+            false,
+            JSON.stringify([0, 0]), // Пустые координаты, можно будет обновить позже
+          ]
+        );
+      }
     }
 
     // Создаем заказ

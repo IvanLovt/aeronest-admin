@@ -57,9 +57,12 @@ function initializeDatabase() {
     connectionString: databaseUrl,
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 15000,
+    connectionTimeoutMillis: 20000,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
+    // Для serverless БД уменьшаем время жизни соединения
+    statement_timeout: 30000,
+    query_timeout: 30000,
     // Включаем SSL для облачных БД
     ...(needsSSL && {
       ssl: {
@@ -71,6 +74,17 @@ function initializeDatabase() {
   // Обработка ошибок подключения
   pool.on("error", (err) => {
     console.error("❌ Ошибка подключения к БД:", err);
+    // При ошибке соединения сбрасываем пул для переподключения
+    if (err.message.includes("terminated") || err.message.includes("closed")) {
+      console.log("🔄 Попытка переподключения к БД...");
+      pool = null;
+      dbInstance = null;
+    }
+  });
+  
+  // Обработка события 'connect' для отслеживания подключений
+  pool.on("connect", () => {
+    console.log("✅ Подключение к БД установлено");
   });
 
   // Создаем Drizzle instance с пулом соединений
@@ -93,7 +107,7 @@ export const db = new Proxy({} as ReturnType<typeof drizzle>, {
   },
 });
 
-// Экспортируем функцию для получения пула
+// Экспортируем функцию для получения пула с автоматическим переподключением
 export const getPool = () => {
   if (!pool) {
     initializeDatabase();
@@ -101,6 +115,18 @@ export const getPool = () => {
   if (!pool) {
     throw new Error("Failed to initialize database pool");
   }
+  
+  // Проверяем, что пул еще активен
+  if (pool.ended) {
+    console.log("🔄 Пул соединений закрыт, переинициализация...");
+    pool = null;
+    dbInstance = null;
+    initializeDatabase();
+    if (!pool) {
+      throw new Error("Failed to reinitialize database pool");
+    }
+  }
+  
   return pool;
 };
 

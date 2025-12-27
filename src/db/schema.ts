@@ -69,9 +69,9 @@ export const orders = pgTable("orders", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  addressId: text("address_id")
-    .notNull()
-    .references(() => deliveryAddresses.id, { onDelete: "restrict" }),
+  addressId: text("address_id").references(() => deliveryAddresses.id, {
+    onDelete: "set null",
+  }),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   status: orderStatusEnum("status").notNull().default("PENDING"),
   items: json("items").notNull(), // JSON массив элементов заказа
@@ -90,6 +90,14 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   addresses: many(deliveryAddresses),
   orders: many(orders),
+  referralCodes: many(referrals, {
+    relationName: "referralCodes",
+  }),
+  referredBy: one(referrals, {
+    fields: [users.id],
+    references: [referrals.referredUserId],
+    relationName: "referredBy",
+  }),
 }));
 
 export const deliveryAddressesRelations = relations(
@@ -247,6 +255,69 @@ export const itemsRelations = relations(items, ({ one }) => ({
   }),
 }));
 
+// Таблица рефералов
+export const referrals = pgTable("referrals", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  refCode: text("ref_code").notNull().unique(), // Реферальный код (уникальный)
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }), // Пользователь, которому принадлежит refCode
+  referredUserId: text("referred_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }), // Пользователь, который зарегистрировался по этому refCode (для обратной совместимости)
+  date: timestamp("date").notNull().defaultNow(), // Дата регистрации по реферальному коду
+  conditions: text("conditions"), // Условия (можно хранить JSON строку или текст)
+  maxUses: text("max_uses"), // Максимальное количество использований (null = без ограничений)
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .$onUpdate(() => new Date())
+    .defaultNow(),
+});
+
+// Таблица для отслеживания использований реферальных кодов
+export const referralUses = pgTable("referral_uses", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  referralId: text("referral_id")
+    .notNull()
+    .references(() => referrals.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Relations для рефералов
+export const referralsRelations = relations(referrals, ({ one, many }) => ({
+  user: one(users, {
+    fields: [referrals.userId],
+    references: [users.id],
+    relationName: "referralCodes",
+  }),
+  referredUser: one(users, {
+    fields: [referrals.referredUserId],
+    references: [users.id],
+    relationName: "referredBy",
+  }),
+  uses: many(referralUses),
+}));
+
+// Relations для использований реферальных кодов
+export const referralUsesRelations = relations(referralUses, ({ one }) => ({
+  referral: one(referrals, {
+    fields: [referralUses.referralId],
+    references: [referrals.id],
+  }),
+  user: one(users, {
+    fields: [referralUses.userId],
+    references: [users.id],
+  }),
+}));
+
 // Типы для экспорта
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -261,3 +332,7 @@ export type CatalogItem = typeof catalog.$inferSelect;
 export type NewCatalogItem = typeof catalog.$inferInsert;
 export type Item = typeof items.$inferSelect;
 export type NewItem = typeof items.$inferInsert;
+export type Referral = typeof referrals.$inferSelect;
+export type NewReferral = typeof referrals.$inferInsert;
+export type ReferralUse = typeof referralUses.$inferSelect;
+export type NewReferralUse = typeof referralUses.$inferInsert;

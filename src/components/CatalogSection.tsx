@@ -17,6 +17,7 @@ import {
 import { useSession } from "next-auth/react";
 import WindowCart from "@/components/UserDash/WindowCart";
 import AuthModal from "@/components/AuthModal";
+import { useFetch } from "@/hooks/useFetch";
 
 // Маппинг названий иконок на компоненты
 const iconMap: Record<string, React.ElementType> = {
@@ -29,7 +30,7 @@ const iconMap: Record<string, React.ElementType> = {
   default: Store,
 };
 
-interface CatalogItem {
+interface Partner {
   id: string;
   name: string;
   category: string;
@@ -42,33 +43,25 @@ interface CatalogItem {
 export default function CatalogSection() {
   const { data: session } = useSession();
   const [filter, setFilter] = useState("all");
-  const [partners, setPartners] = useState<CatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [selectedPartner, setSelectedPartner] = useState<CatalogItem | null>(
-    null
-  );
+  const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  useEffect(() => {
-    async function fetchCatalog() {
-      try {
-        const categoryParam = filter !== "all" ? `?category=${filter}` : "";
-        const response = await fetch(`/api/catalog${categoryParam}`);
-        const result = await response.json();
+  const categoryParam = filter !== "all" ? `?category=${filter}` : "";
+  const { data, loading: fetchLoading } = useFetch<{ data: Partner[] }>({
+    url: `/api/catalog${categoryParam}`,
+    dependencies: [filter],
+  });
 
-        if (result.success && result.data) {
-          setPartners(result.data);
-        }
-      } catch (error) {
-        console.error("Ошибка загрузки каталога:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
+  const partners: Partner[] = Array.isArray(
+    (data as { data?: Partner[] })?.data
+  )
+    ? (data as { data: Partner[] }).data
+    : Array.isArray(data)
+    ? (data as Partner[])
+    : [];
 
-    fetchCatalog();
-  }, [filter]);
+  const loading = fetchLoading;
 
   const filtered = partners;
 
@@ -149,6 +142,16 @@ export default function CatalogSection() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((p) => (
             <div
+              onClick={() => {
+                // Проверяем авторизацию
+                if (!session?.user) {
+                  setIsAuthModalOpen(true);
+                  return;
+                }
+                // Если авторизован, открываем корзину
+                setSelectedPartner(p);
+                setIsCartOpen(true);
+              }}
               key={p.id}
               className="group bg-white rounded-[32px] border border-gray-100 p-6 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all"
             >
@@ -170,19 +173,7 @@ export default function CatalogSection() {
               <p className="text-sm text-gray-500 mb-6 leading-relaxed">
                 {p.description}
               </p>
-              <button
-                onClick={() => {
-                  // Проверяем авторизацию
-                  if (!session?.user) {
-                    setIsAuthModalOpen(true);
-                    return;
-                  }
-                  // Если авторизован, открываем корзину
-                  setSelectedPartner(p);
-                  setIsCartOpen(true);
-                }}
-                className="w-full py-4 bg-gray-50 group-hover:bg-[#0A84FF] group-hover:text-white text-[#0D1B2A] rounded-2xl font-bold transition-all flex items-center justify-center gap-2"
-              >
+              <button className="w-full py-4 bg-gray-50 group-hover:bg-[#0A84FF] group-hover:text-white text-[#0D1B2A] rounded-2xl font-bold transition-all flex items-center justify-center gap-2">
                 Перейти к заказу
                 <ChevronRight size={18} />
               </button>
