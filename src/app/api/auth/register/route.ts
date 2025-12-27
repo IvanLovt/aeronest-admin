@@ -52,69 +52,67 @@ export async function POST(request: NextRequest) {
     // Дополнительная санитизация
     const sanitizedName = name ? sanitizeString(name) : null;
 
-    // Проверка реферального кода (обязателен для регистрации)
-    if (!referralCode || !referralCode.trim()) {
-      return NextResponse.json(
-        { error: "Реферальный код обязателен для регистрации" },
-        { status: 400 }
-      );
-    }
-
+    // Проверка реферального кода (необязателен, но если указан - проверяем)
     const pool = getPool();
-    const refCodeUpper = referralCode.trim().toUpperCase();
+    
+    if (referralCode && referralCode.trim()) {
+      const refCodeUpper = referralCode.trim().toUpperCase();
 
-    try {
-      // Ищем реферальный код в таблице
-      const referralResult = await pool.query(
-        `SELECT id, user_id, referred_user_id, max_uses 
-         FROM referrals 
-         WHERE ref_code = $1`,
-        [refCodeUpper]
-      );
+      try {
+        // Ищем реферальный код в таблице
+        const referralResult = await pool.query(
+          `SELECT id, user_id, referred_user_id, max_uses 
+           FROM referrals 
+           WHERE ref_code = $1`,
+          [refCodeUpper]
+        );
 
-      if (referralResult.rows.length === 0) {
+        if (referralResult.rows.length === 0) {
+          return NextResponse.json(
+            { error: `Реферальный код "${refCodeUpper}" не найден` },
+            { status: 400 }
+          );
+        }
+
+        const referral = referralResult.rows[0];
+
+        // Проверяем количество использований
+        const usesCountResult = await pool.query(
+          `SELECT COUNT(*) as count 
+           FROM referral_uses 
+           WHERE referral_id = $1`,
+          [referral.id]
+        );
+
+        const usesCount = parseInt(usesCountResult.rows[0].count || "0", 10);
+        const maxUses = referral.max_uses
+          ? parseInt(referral.max_uses, 10)
+          : null;
+
+        // Проверяем, не превышен ли лимит использований
+        if (maxUses !== null && usesCount >= maxUses) {
+          return NextResponse.json(
+            {
+              error: `Реферальный код "${refCodeUpper}" достиг максимального количества использований (${maxUses})`,
+            },
+            { status: 400 }
+          );
+        }
+
+        console.log(
+          `✅ Реферальный код ${refCodeUpper} найден и валиден (использований: ${usesCount}${
+            maxUses ? `/${maxUses}` : "/∞"
+          })`
+        );
+      } catch (refError) {
+        console.error("❌ Ошибка при проверке реферального кода:", refError);
         return NextResponse.json(
-          { error: `Реферальный код "${refCodeUpper}" не найден` },
-          { status: 400 }
+          { error: "Ошибка при проверке реферального кода. Попробуйте позже." },
+          { status: 500 }
         );
       }
-
-      const referral = referralResult.rows[0];
-
-      // Проверяем количество использований
-      const usesCountResult = await pool.query(
-        `SELECT COUNT(*) as count 
-         FROM referral_uses 
-         WHERE referral_id = $1`,
-        [referral.id]
-      );
-
-      const usesCount = parseInt(usesCountResult.rows[0].count || "0", 10);
-      const maxUses = referral.max_uses
-        ? parseInt(referral.max_uses, 10)
-        : null;
-
-      // Проверяем, не превышен ли лимит использований
-      if (maxUses !== null && usesCount >= maxUses) {
-        return NextResponse.json(
-          {
-            error: `Реферальный код "${refCodeUpper}" достиг максимального количества использований (${maxUses})`,
-          },
-          { status: 400 }
-        );
-      }
-
-      console.log(
-        `✅ Реферальный код ${refCodeUpper} найден и валиден (использований: ${usesCount}${
-          maxUses ? `/${maxUses}` : "/∞"
-        })`
-      );
-    } catch (refError) {
-      console.error("❌ Ошибка при проверке реферального кода:", refError);
-      return NextResponse.json(
-        { error: "Ошибка при проверке реферального кода. Попробуйте позже." },
-        { status: 500 }
-      );
+    } else {
+      console.log("ℹ️ Реферальный код не указан, регистрация продолжается без него");
     }
 
     console.log(`📝 Регистрация нового пользователя: ${email}`);

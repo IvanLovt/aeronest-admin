@@ -26,7 +26,7 @@ export interface BruteForceOptions {
 }
 
 const defaultOptions: BruteForceOptions = {
-  maxAttempts: 5,
+  maxAttempts: 50,
   windowMs: 15 * 60 * 1000, // 15 минут
   blockDurationMs: 30 * 60 * 1000, // 30 минут блокировки
 };
@@ -129,4 +129,3 @@ export function getBlockInfo(identifier: string): {
     attempts: attempt.count,
   };
 }
-

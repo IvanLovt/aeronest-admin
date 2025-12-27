@@ -278,7 +278,8 @@ export default function AuthModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Реферальный код <span className="text-red-500">*</span>
+                  Реферальный код{" "}
+                  <span className="text-gray-400">(необязательно)</span>
                 </label>
                 <div className="relative">
                   <UserIcon
@@ -291,13 +292,13 @@ export default function AuthModal({
                     onChange={(e) =>
                       setReferralCode(e.target.value.toUpperCase())
                     }
-                    required
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent outline-none transition-all uppercase"
                     placeholder="Введите реферальный код"
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Код должен существовать в системе и не быть использованным
+                  Если у вас есть реферальный код, введите его для получения
+                  бонусов
                 </p>
               </div>
             </div>

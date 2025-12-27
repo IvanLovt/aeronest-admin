@@ -39,6 +39,8 @@ export default function Header({
         router.push(`/${session.user.id}/catalog`);
       } else if (tab === "dashboard") {
         router.push(`/${session.user.id}/dashboard`);
+      } else if (tab === "busnes") {
+        router.push(`/${session.user.id}/busnes`);
       }
     } else if (useUrlNavigation) {
       // Если URL-навигация включена, но пользователь не авторизован
@@ -104,9 +106,15 @@ export default function Header({
             Каталог
           </button>
           <button
-            onClick={() => (setActiveTab ? setActiveTab("busnes") : null)}
+            onClick={() => handleNavigation("busnes")}
             className={`hover:text-[#0A84FF] transition-colors ${
-              activeTab === "busnes" ? "text-[#0A84FF]" : ""
+              (
+                useUrlNavigation
+                  ? pathname?.includes("/busnes")
+                  : activeTab === "busnes"
+              )
+                ? "text-[#0A84FF]"
+                : ""
             }`}
           >
             Бизнесу

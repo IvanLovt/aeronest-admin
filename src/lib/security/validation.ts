@@ -49,7 +49,10 @@ export const registerSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
   name: nameSchema.optional(),
-  referralCode: referralCodeSchema,
+  referralCode: z
+    .union([referralCodeSchema, z.literal(""), z.null(), z.undefined()])
+    .optional()
+    .transform((val) => (val === "" || val === null ? undefined : val)),
 });
 
 // Схема для входа
