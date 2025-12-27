@@ -115,6 +115,25 @@ export const db = new Proxy({} as ReturnType<typeof drizzle>, {
 
 // Экспортируем функцию для получения пула с автоматическим переподключением
 export const getPool = () => {
+  // Проверяем наличие DATABASE_URL перед инициализацией
+  const url =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL;
+
+  if (!url) {
+    const errorMessage =
+      "DATABASE_URL is required. Please set it in your environment variables.";
+    console.error("❌", errorMessage);
+    console.error(
+      "   Available env vars:",
+      Object.keys(process.env)
+        .filter((k) => k.includes("DATABASE") || k.includes("POSTGRES"))
+        .join(", ") || "none"
+    );
+    throw new Error(errorMessage);
+  }
+
   if (!pool) {
     initializeDatabase();
   }
