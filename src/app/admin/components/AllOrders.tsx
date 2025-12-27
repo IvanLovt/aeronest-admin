@@ -96,10 +96,14 @@ export default function AllOrders() {
     url: "/api/admin/orders",
   });
 
-  const orders = (data as any)?.orders || data || [];
+  const orders: Order[] = Array.isArray((data as any)?.orders)
+    ? (data as any).orders
+    : Array.isArray(data)
+    ? (data as Order[])
+    : [];
 
   // Фильтрация заказов по поисковому запросу
-  const filteredOrders = orders.filter((order) => {
+  const filteredOrders = orders.filter((order: Order) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
