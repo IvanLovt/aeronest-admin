@@ -13,6 +13,12 @@ function getDatabaseUrl(): string {
     process.env.POSTGRES_URL;
 
   if (!url) {
+    // Во время билда не выбрасываем ошибку, только предупреждаем
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      console.warn("⚠️ DATABASE_URL не найден во время билда. Это нормально, если переменные установлены в среде выполнения.");
+      return "postgresql://placeholder:placeholder@localhost:5432/placeholder";
+    }
+    
     console.error("❌ DATABASE_URL не найден в переменных окружения!");
     console.error(
       "   Доступные переменные:",

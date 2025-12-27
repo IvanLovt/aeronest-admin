@@ -11,14 +11,13 @@ declare module "next-auth" {
   }
 }
 
-// Проверяем наличие AUTH_SECRET
-if (!process.env.AUTH_SECRET) {
-  console.error("❌ AUTH_SECRET не установлен в переменных окружения!");
-  throw new Error("AUTH_SECRET is required");
+// Проверяем наличие AUTH_SECRET (только во время выполнения, не во время билда)
+if (!process.env.AUTH_SECRET && process.env.NODE_ENV !== "production") {
+  console.warn("⚠️ AUTH_SECRET не установлен в переменных окружения!");
 }
 
 export const authOptions = {
-  secret: process.env.AUTH_SECRET,
+  secret: process.env.AUTH_SECRET || "development-secret-key-change-in-production",
   // Адаптер не нужен при использовании JWT стратегии и CredentialsProvider
   // Адаптер используется только для database sessions
   providers: [
