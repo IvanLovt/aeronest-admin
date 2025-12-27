@@ -4,45 +4,53 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { createId } from "@paralleldrive/cuid2";
+import {
+  registerSchema,
+  validateAndSanitize,
+  sanitizeString,
+} from "@/lib/security/validation";
+import { getClientIP } from "@/lib/security/rateLimit";
+import { logSecurityEvent, SecurityEventType } from "@/lib/security/logger";
 
 export async function POST(request: NextRequest) {
+  const clientIP = getClientIP(request);
+  const userAgent = request.headers.get("user-agent") || "unknown";
+
   try {
     let body;
     try {
       body = await request.json();
     } catch {
+      logSecurityEvent({
+        type: SecurityEventType.INVALID_INPUT,
+        ip: clientIP,
+        userAgent,
+        path: request.nextUrl.pathname,
+        details: { error: "Invalid JSON" },
+      });
       return NextResponse.json(
         { error: "Неверный формат данных запроса" },
         { status: 400 }
       );
     }
 
-    const { email, password, name, referralCode } = body;
-
-    // Валидация
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: "Email и пароль обязательны для заполнения" },
-        { status: 400 }
-      );
+    // Валидация и санитизация входных данных
+    const validation = validateAndSanitize(registerSchema, body);
+    if (!validation.success) {
+      logSecurityEvent({
+        type: SecurityEventType.INVALID_INPUT,
+        ip: clientIP,
+        userAgent,
+        path: request.nextUrl.pathname,
+        details: { error: validation.error },
+      });
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    // Проверка формата email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: "Неверный формат email адреса" },
-        { status: 400 }
-      );
-    }
+    const { email, password, name, referralCode } = validation.data;
 
-    // Проверка длины пароля
-    if (password.length < 6) {
-      return NextResponse.json(
-        { error: "Пароль должен содержать минимум 6 символов" },
-        { status: 400 }
-      );
-    }
+    // Дополнительная санитизация
+    const sanitizedName = name ? sanitizeString(name) : null;
 
     // Проверка реферального кода (обязателен для регистрации)
     if (!referralCode || !referralCode.trim()) {
@@ -144,7 +152,7 @@ export async function POST(request: NextRequest) {
         id: userId,
         email,
         passwordHash,
-        name: name || null,
+        name: sanitizedName,
       })
       .returning();
 
