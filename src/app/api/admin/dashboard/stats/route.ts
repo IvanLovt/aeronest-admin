@@ -86,10 +86,11 @@ export async function GET() {
     );
 
     // Рассчитываем процент изменения выручки
-    const revenueChange =
+    const revenueChangeValue =
       revenuePrev24h > 0
-        ? (((revenue24h - revenuePrev24h) / revenuePrev24h) * 100).toFixed(0)
-        : "0";
+        ? ((revenue24h - revenuePrev24h) / revenuePrev24h) * 100
+        : 0;
+    const revenueChange = revenueChangeValue.toFixed(0);
 
     // 6. Активные заказы за последние 10 минут (для тренда)
     const recentActiveOrdersResult = await pool.query(
@@ -135,7 +136,7 @@ export async function GET() {
         activeUsers,
         successRate: `${successRate}%`,
         revenue24h,
-        revenueChange: revenueChange !== "0" ? `${revenueChange > 0 ? "+" : ""}${revenueChange}% к вчера` : "Нет данных",
+        revenueChange: revenueChange !== "0" ? `${revenueChangeValue > 0 ? "+" : ""}${revenueChange}% к вчера` : "Нет данных",
         recentActiveOrders: recentActiveOrders > 0 ? `+${recentActiveOrders} за 10 мин` : "Без изменений",
         newUsersToday: newUsersToday > 0 ? `+${newUsersToday} сегодня` : "0 сегодня",
         totalDelivered: `${totalDelivered.toLocaleString("ru-RU")} всего`,
